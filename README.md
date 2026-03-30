@@ -12,9 +12,11 @@
 
 - **四种策略对比回测**：普通定投 vs 趋势加倍 vs 趋势暂停 vs 趋势分级
 - **MA30 趋势过滤**：判断价格在均线上下，动态调整投入金额
-- **交互式 HTML 报告**：基于 ECharts 5，支持缩放、切换、下钻
-- **纯标准库**：仅依赖 Python 内置模块（`json`, `math`, `datetime`），零第三方依赖
-- **命令行友好**：支持任意标的、任意均线周期、任意基础金额
+- **🎯 止盈止损**：达到收益目标自动清仓止盈，触及亏损阈值自动止损离场，下一定投日重新建仓
+- **🚀 一键运行**：`run_backtest.py` 串联回测+报告+浏览器预览，无需手动拼接命令
+- **交互式 HTML 报告**：基于 ECharts 5，支持缩放、切换、止盈止损事件高亮
+- **纯标准库**：仅依赖 Python 内置模块（`json`, `http`, `datetime`），零第三方依赖
+- **命令行友好**：支持任意标的、任意均线周期、任意基础金额、自定义止盈止损阈值
 
 ---
 
@@ -59,21 +61,43 @@
 ]
 ```
 
-### Step 1：运行回测
+### Step 1：一键运行（推荐）
+
+```bash
+# 直接运行，自动回测 + 生成报告 + 打开浏览器预览
+python scripts/run_backtest.py --data_path 510300_data.json
+
+# 自定义参数（止盈30%、止损15%、月投2000元）
+python scripts/run_backtest.py \
+  --data_path 510300_data.json \
+  --monthly_amount 2000 \
+  --take_profit 0.3 \
+  --stop_loss 0.15
+
+# 禁用止盈止损（纯趋势定投对比）
+python scripts/run_backtest.py \
+  --data_path 510300_data.json \
+  --take_profit 0 \
+  --stop_loss 0
+```
+
+### Step 2（手动模式）：分步运行回测
 
 ```bash
 python scripts/backtest.py \
   --data_path 510300_data.json \
   --output_dir ./output \
   --monthly_amount 1000 \
-  --ma_period 30
+  --ma_period 30 \
+  --take_profit 0.3 \
+  --stop_loss 0.15
 ```
 
 输出：
-- `backtest_results.json`：四种策略的完整回测结果
+- `backtest_results.json`：四种策略的完整回测结果（含止盈止损事件）
 - `price_ma30.json`：价格序列与 MA30 序列
 
-### Step 2：生成报告
+### Step 3（手动模式）：生成报告
 
 ```bash
 python scripts/generate_report.py \
@@ -97,6 +121,7 @@ ma30-dca-strategy/
 ├── LICENSE                       ← MIT 开源协议
 ├── SKILL.md                      ← WorkBuddy Skill 入口
 ├── scripts/
+│   ├── run_backtest.py           ← 🚀 一键运行脚本（推荐入口）
 │   ├── backtest.py               ← 回测引擎（命令行脚本）
 │   └── generate_report.py        ← HTML 报告生成器
 └── references/
@@ -110,13 +135,13 @@ ma30-dca-strategy/
 交互式 HTML 报告包含：
 
 1. **策略对比卡片** — 点击切换不同策略
-2. **核心指标看板** — 总投入、最终市值、盈亏、年化收益、最大回撤
+2. **核心指标看板** — 总投入、最终市值、盈亏、年化收益、最大回撤、**止盈次数、止损次数**
 3. **价格 + MA30 走势图** — 支持区间缩放
 4. **净值 vs 投入曲线** — 直观展示增值效果
 5. **四策略收益率对比** — 动态折线图
 6. **每月投入柱状图** — 加倍/正常/暂停 三色区分
-7. **策略综合对比表格** — 量化指标一览
-8. **交易明细记录** — 可按类型过滤
+7. **策略综合对比表格** — 量化指标一览（含止盈止损统计）
+8. **交易明细记录** — 可按类型过滤（全部/买入/暂停/**🎯止盈**/**🛑止损**）
 
 ---
 
@@ -130,6 +155,15 @@ ma30-dca-strategy/
 | `--output_dir` | 输出目录 | `.`（当前目录） |
 | `--monthly_amount` | 每期基础定投金额（元） | `1000` |
 | `--ma_period` | 均线周期（交易日数） | `30` |
+| `--take_profit` | 止盈阈值（浮盈比例），`0` 禁用 | `0.30` |
+| `--stop_loss` | 止损阈值（浮亏比例），`0` 禁用 | `0.15` |
+
+### run_backtest.py（一键脚本，包含以上全部参数，额外支持）
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--port` | 本地预览 HTTP 服务端口 | `8899` |
+| `--no_browser` | 不自动打开浏览器 | `False` |
 
 ### generate_report.py
 
@@ -184,6 +218,7 @@ MIT License — 详见 [LICENSE](LICENSE)
 - 新增策略（如均值回归定投、网格定投）
 - 支持更多数据格式（CSV、SQLite）
 - 报告 UI 优化
+- 止盈止损后的再入场策略（条件触发 vs 无脑下一定投日）
 
 ---
 

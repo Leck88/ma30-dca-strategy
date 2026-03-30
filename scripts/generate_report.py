@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-30均线趋势过滤器定投策略 — 交互式HTML报告生成器
+30均线趋势过滤器定投策略 — 交互式HTML报告生成器（含止盈止损）
 用法:
   python generate_report.py --results_path <JSON> --price_path <JSON> [--output_path <HTML>] [--ma_period 30]
 """
@@ -13,13 +13,13 @@ import os
 
 def parse_args():
     parser = argparse.ArgumentParser(description="生成定投策略回测HTML报告")
-    parser.add_argument("--results_path", required=True, help="backtest_results.json 路径")
-    parser.add_argument("--price_path",   required=True, help="price_ma<N>.json 路径")
-    parser.add_argument("--output_path",  default=None,  help="输出HTML文件路径（默认与results同目录）")
-    parser.add_argument("--ma_period",    type=int, default=30, help="均线周期，用于图表标题展示，默认30")
-    parser.add_argument("--ts_code",      default="510300.SH", help="标的代码，用于报告标题")
-    parser.add_argument("--start_date",   default="", help="回测起始日期（展示用）")
-    parser.add_argument("--end_date",     default="", help="回测结束日期（展示用）")
+    parser.add_argument("--results_path",   required=True, help="backtest_results.json 路径")
+    parser.add_argument("--price_path",     required=True, help="price_ma<N>.json 路径")
+    parser.add_argument("--output_path",    default=None,  help="输出HTML文件路径（默认与results同目录）")
+    parser.add_argument("--ma_period",      type=int, default=30, help="均线周期，用于图表标题展示，默认30")
+    parser.add_argument("--ts_code",        default="510300.SH", help="标的代码，用于报告标题")
+    parser.add_argument("--start_date",     default="", help="回测起始日期（展示用）")
+    parser.add_argument("--end_date",       default="", help="回测结束日期（展示用）")
     parser.add_argument("--monthly_amount", type=float, default=1000.0, help="基础定投金额")
     return parser.parse_args()
 
@@ -31,6 +31,17 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
 
     date_range = f"{start_date} ~ {end_date}" if start_date and end_date else "历史区间"
     ma_label   = f"MA{ma_period}"
+
+    # 从第一个策略的 config 提取止盈止损参数（用于展示）
+    tp_rate = 0
+    sl_rate = 0
+    if results and "config" in results[0]:
+        tp_rate = results[0]["config"].get("take_profit", 0)
+        sl_rate = results[0]["config"].get("stop_loss", 0)
+
+    tp_sl_info = ""
+    if tp_rate > 0:
+        tp_sl_info = f"止盈: <span>+{tp_rate*100:.0f}%</span> &nbsp;|&nbsp; 止损: <span>-{sl_rate*100:.0f}%</span> &nbsp;|&nbsp;"
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -102,16 +113,18 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
 
   /* ===== 指标网格 ===== */
   .metrics-grid {{
-    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 32px;
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 32px;
   }}
   .metric-card {{
     background: #161b22; border: 1px solid #21262d; border-radius: 10px;
     padding: 16px; text-align: center;
   }}
   .metric-label {{ font-size: 11px; color: #8b949e; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }}
-  .metric-value {{ font-size: 20px; font-weight: 700; color: #f0f6fc; font-variant-numeric: tabular-nums; }}
+  .metric-value {{ font-size: 18px; font-weight: 700; color: #f0f6fc; font-variant-numeric: tabular-nums; }}
   .metric-value.positive {{ color: #f85149; }}
   .metric-value.neutral   {{ color: #58a6ff; }}
+  .metric-value.tp-color  {{ color: #f85149; }}
+  .metric-value.sl-color  {{ color: #3fb950; }}
 
   /* ===== 图表区域 ===== */
   .chart-section {{ margin-bottom: 28px; }}
@@ -151,6 +164,8 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
   .tag-orange {{ background: rgba(210,153,34,0.12);  color: #d29922; }}
   .tag-green  {{ background: rgba(63,185,80,0.12);   color: #3fb950; }}
   .tag-purple {{ background: rgba(188,140,255,0.12); color: #bc8cff; }}
+  .tag-red    {{ background: rgba(248,81,73,0.15);   color: #f85149; }}
+  .tag-teal   {{ background: rgba(56,189,248,0.12);  color: #38bdf8; }}
 
   /* ===== 信息栏 ===== */
   .info-bar {{
@@ -171,10 +186,14 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
   .tab-btn.active {{ background: #58a6ff; border-color: #58a6ff; color: #0d1117; font-weight: 600; }}
 
   /* ===== 交易记录 ===== */
-  .trade-log {{ max-height: 320px; overflow-y: auto; }}
+  .trade-log {{ max-height: 360px; overflow-y: auto; }}
   .trade-log::-webkit-scrollbar {{ width: 6px; }}
   .trade-log::-webkit-scrollbar-track {{ background: #0d1117; }}
   .trade-log::-webkit-scrollbar-thumb {{ background: #30363d; border-radius: 3px; }}
+
+  /* ===== 止盈止损事件行 ===== */
+  .tp-row td {{ background: rgba(248,81,73,0.06) !important; }}
+  .sl-row td {{ background: rgba(63,185,80,0.06) !important; }}
 
   /* ===== 免责声明 ===== */
   .disclaimer {{
@@ -190,12 +209,12 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
 <div class="header">
   <div class="header-inner">
     <div class="badge">📊 量化策略回测报告</div>
-    <h1 class="title">{ma_label}趋势过滤器 × 定投策略</h1>
+    <h1 class="title">{ma_label}趋势过滤器 × 定投策略（含止盈止损）</h1>
     <p class="subtitle">
       标的: <span>{ts_code}</span> &nbsp;|&nbsp;
       回测区间: <span>{date_range}</span> &nbsp;|&nbsp;
       每期基础金额: <span>¥{monthly_amount:,.0f}</span> &nbsp;|&nbsp;
-      定投周期: <span>每月第一交易日</span>
+      {tp_sl_info}定投周期: <span>每月第一交易日</span>
     </p>
   </div>
 </div>
@@ -204,8 +223,10 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
 
   <div class="info-bar">
     💡 <strong>策略核心逻辑：</strong>
-    以{ma_label}（{ma_period}日移动均线）为趋势过滤器，判断市场处于上升还是下跌趋势，
-    动态调整每月定投金额——低位加大投入摊薄成本，高位减少或保持投入控制风险。
+    以{ma_label}（{ma_period}日移动均线）为趋势过滤器，动态调整每月定投金额。
+    当持仓浮盈达 <strong style="color:#f85149">+{tp_rate*100:.0f}%</strong> 时自动止盈清仓；
+    浮亏达 <strong style="color:#3fb950">-{sl_rate*100:.0f}%</strong> 时自动止损离场，
+    下一个定投日重新开始建仓。
   </div>
 
   <!-- 策略卡片 -->
@@ -269,7 +290,8 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
         <thead>
           <tr>
             <th>策略名称</th><th>总投入</th><th>最终市值</th><th>绝对收益</th>
-            <th>总收益率</th><th>年化收益</th><th>最大回撤</th><th>买入次数</th><th>暂停次数</th>
+            <th>总收益率</th><th>年化收益</th><th>最大回撤</th>
+            <th>买入次数</th><th>暂停次数</th><th>止盈次数</th><th>止损次数</th>
           </tr>
         </thead>
         <tbody id="compareTableBody"></tbody>
@@ -285,13 +307,15 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
         <button class="tab-btn active" onclick="filterTrade('all')">全部</button>
         <button class="tab-btn" onclick="filterTrade('buy')">买入记录</button>
         <button class="tab-btn" onclick="filterTrade('skip')">暂停记录</button>
+        <button class="tab-btn" onclick="filterTrade('take_profit')">🎯 止盈记录</button>
+        <button class="tab-btn" onclick="filterTrade('stop_loss')">🛑 止损记录</button>
       </div>
       <div class="trade-log">
         <table class="compare-table" id="tradeTable">
           <thead>
             <tr>
               <th>日期</th><th>收盘价</th><th>{ma_label}</th><th>相对位置</th>
-              <th>本期投入</th><th>操作</th><th>累计投入</th><th>组合市值</th>
+              <th>本期金额</th><th>操作详情</th><th>累计投入</th><th>组合市值</th>
             </tr>
           </thead>
           <tbody id="tradeTableBody"></tbody>
@@ -303,15 +327,15 @@ def generate_html(results: list, price_ma30: list, ma_period: int,
   <div class="disclaimer">
     <strong>⚠️ 风险提示：</strong>
     本报告仅为历史数据回测分析，不构成任何投资建议。历史业绩不代表未来表现。
-    定投策略可降低投资风险，但无法保证盈利。投资有风险，入市需谨慎。
+    止盈止损策略可能导致错过后续行情，定投策略可降低投资风险但无法保证盈利。投资有风险，入市需谨慎。
   </div>
 
 </div><!-- /main -->
 
 <script>
-const RESULTS  = {results_json};
+const RESULTS   = {results_json};
 const PRICE_MA30 = {price_json};
-const MA_LABEL = '{ma_label}';
+const MA_LABEL  = '{ma_label}';
 
 const COLORS  = ['#58a6ff', '#f85149', '#3fb950', '#bc8cff'];
 const TAGS    = ['tag-blue', 'tag-orange', 'tag-green', 'tag-purple'];
@@ -339,6 +363,7 @@ function selectStrategy(idx) {{
 function renderMetrics(idx) {{
   const r = RESULTS[idx];
   const profit = r.final_value - r.total_invested;
+  const hasTpSl = r.config && (r.config.take_profit > 0 || r.config.stop_loss > 0);
   document.getElementById('metricsGrid').innerHTML = `
     <div class="metric-card">
       <div class="metric-label">总投入金额</div>
@@ -361,7 +386,25 @@ function renderMetrics(idx) {{
     <div class="metric-card">
       <div class="metric-label">最大回撤</div>
       <div class="metric-value down">-${{r.max_drawdown}}%</div>
-    </div>`;
+    </div>
+    ${{hasTpSl ? `
+    <div class="metric-card">
+      <div class="metric-label">🎯 止盈次数</div>
+      <div class="metric-value tp-color">${{r.take_profit_count ?? 0}} 次</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🛑 止损次数</div>
+      <div class="metric-value sl-color">${{r.stop_loss_count ?? 0}} 次</div>
+    </div>` : `
+    <div class="metric-card">
+      <div class="metric-label">买入次数</div>
+      <div class="metric-value neutral">${{r.invest_count}}</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">暂停次数</div>
+      <div class="metric-value">${{r.skip_count}}</div>
+    </div>`}}
+  `;
 }}
 
 function initChartPrice() {{
@@ -442,13 +485,15 @@ function renderStrategy(idx) {{
 function renderMonthlyChart(idx) {{
   if (!chartMonthly) chartMonthly = echarts.init(document.getElementById('chartMonthly'));
   const r = RESULTS[idx];
-  const amounts = r.trade_log.map(t => t.amount);
+  // 仅取定投记录（type=invest）
+  const investLogs = r.trade_log.filter(t => t.type === 'invest' || !t.type);
+  const amounts = investLogs.map(t => t.amount);
   chartMonthly.setOption({{
     backgroundColor: 'transparent',
     tooltip: {{ trigger: 'axis', backgroundColor: '#21262d', borderColor: '#30363d', textStyle: {{ color: '#e6edf3', fontSize: 12 }} }},
     grid: {{ top: 20, bottom: 40, left: 55, right: 16 }},
     xAxis: {{
-      type: 'category', data: r.trade_log.map(t=>t.date.slice(0,7)),
+      type: 'category', data: investLogs.map(t=>t.date.slice(0,7)),
       axisLine: {{ lineStyle: {{ color: '#30363d' }} }},
       axisLabel: {{ color: '#8b949e', fontSize: 10, rotate: 45, interval: 2 }},
     }},
@@ -462,7 +507,7 @@ function renderMonthlyChart(idx) {{
       data: amounts.map((a, i) => ({{
         value: a,
         itemStyle: {{
-          color: a===0?'#30363d':(a>1000?'#f85149':(a<1000?'#3fb950':COLORS[idx])),
+          color: a===0?'#30363d':(a>1000?'#f85149':(a<1000&&a>0?'#3fb950':COLORS[idx])),
           borderRadius: [3,3,0,0],
         }},
       }})),
@@ -517,37 +562,63 @@ function renderCompareTable() {{
       <td class="down">-${{r.max_drawdown}}%</td>
       <td>${{r.invest_count}}</td>
       <td>${{r.skip_count>0?r.skip_count:'—'}}</td>
+      <td>${{(r.take_profit_count??0)>0?'<span class="tag tag-red">'+r.take_profit_count+'次</span>':'—'}}</td>
+      <td>${{(r.stop_loss_count??0)>0?'<span class="tag tag-teal">'+r.stop_loss_count+'次</span>':'—'}}</td>
     </tr>`;
   }}).join('');
 }}
 
 function filterTrade(filter) {{
   currentFilter = filter;
-  document.querySelectorAll('.tab-btn').forEach(b => {{
-    b.classList.toggle('active', b.textContent.includes(filter==='all'?'全部':filter==='buy'?'买入':'暂停'));
-  }});
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
   renderTradeTable(currentStrategy, filter);
 }}
 
 function renderTradeTable(idx, filter) {{
   let logs = RESULTS[idx].trade_log;
-  if (filter === 'buy')  logs = logs.filter(t => t.amount > 0);
-  if (filter === 'skip') logs = logs.filter(t => t.amount === 0);
+  if (filter === 'buy')         logs = logs.filter(t => (t.type === 'invest' || !t.type) && t.amount > 0);
+  if (filter === 'skip')        logs = logs.filter(t => (t.type === 'invest' || !t.type) && t.amount === 0);
+  if (filter === 'take_profit') logs = logs.filter(t => t.type === 'take_profit');
+  if (filter === 'stop_loss')   logs = logs.filter(t => t.type === 'stop_loss');
+
   document.getElementById('tradeTableBody').innerHTML = logs.map(t => {{
+    const isTp = t.type === 'take_profit';
+    const isSl = t.type === 'stop_loss';
     const above  = t.ma30 ? t.price > t.ma30 : true;
     const pct    = t.ma30 ? ((t.price - t.ma30) / t.ma30 * 100).toFixed(1) : '-';
     const posLabel = above ? `均线上 +${{pct}}%` : `均线下 ${{pct}}%`;
-    return `<tr>
+
+    let amountCell = '';
+    if (isTp || isSl) {{
+      amountCell = `<span style="color:${{isTp?'#f85149':'#3fb950'}}">${{isTp?'全仓卖出':'全仓止损'}}</span>`;
+    }} else if (t.amount > 0) {{
+      amountCell = `¥${{t.amount.toLocaleString()}}`;
+    }} else {{
+      amountCell = '-';
+    }}
+
+    let actionCell = '';
+    if (isTp) {{
+      actionCell = `<span class="tag tag-red">🎯 止盈</span>`;
+    }} else if (isSl) {{
+      actionCell = `<span class="tag tag-teal">🛑 止损</span>`;
+    }} else if (t.amount === 0) {{
+      actionCell = '<span style="color:#8b949e">暂停</span>';
+    }} else if (t.amount > 1000) {{
+      actionCell = '<span class="up">加倍/多投</span>';
+    }} else {{
+      actionCell = `<span style="color:${{COLORS[idx]}}">正常投入</span>`;
+    }}
+
+    const rowClass = isTp ? 'tp-row' : (isSl ? 'sl-row' : '');
+    return `<tr class="${{rowClass}}">
       <td>${{t.date}}</td>
       <td>¥${{t.price}}</td>
       <td>${{t.ma30?'¥'+t.ma30:'-'}}</td>
       <td class="${{above?'up':'down'}}">${{posLabel}}</td>
-      <td>${{t.amount>0?'¥'+t.amount.toLocaleString():'-'}}</td>
-      <td>${{t.amount===0
-        ?'<span style="color:#8b949e">暂停</span>'
-        :t.amount>1000
-          ?'<span class="up">加倍/多投</span>'
-          :'<span style="color:'+COLORS[idx]+'">正常投入</span>'}}</td>
+      <td>${{amountCell}}</td>
+      <td>${{actionCell}} <small style="color:#8b949e;font-size:11px">${{t.action||''}}</small></td>
       <td>¥${{t.total_invested.toLocaleString()}}</td>
       <td class="${{t.portfolio_value>t.total_invested?'up':'down'}}">¥${{t.portfolio_value.toLocaleString()}}</td>
     </tr>`;
@@ -593,7 +664,7 @@ def main():
 
     output_path = args.output_path
     if not output_path:
-        base_dir  = os.path.dirname(args.results_path)
+        base_dir    = os.path.dirname(args.results_path)
         output_path = os.path.join(base_dir, "ma30_dca_report.html")
 
     with open(output_path, "w", encoding="utf-8") as f:
