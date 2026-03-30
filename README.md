@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/yourusername/ma30-dca-strategy?style=social)](https://github.com/yourusername/ma30-dca-strategy)
+[![Stars](https://img.shields.io/github/stars/Leck88/ma30-dca-strategy?style=social)](https://github.com/Leck88/ma30-dca-strategy)
 
 > 用 30 日均线作为趋势过滤器，对定投策略进行增强优化的回测工具。支持四种策略对比，生成交互式 HTML 报告。
 
@@ -153,7 +153,7 @@ ma30-dca-strategy/
 **触发词**：定投策略、趋势定投、MA30定投、均线定投、定投回测……
 
 ```bash
-git clone https://github.com/yourusername/ma30-dca-strategy.git \
+git clone https://github.com/Leck88/ma30-dca-strategy.git \
   ~/.workbuddy/skills/ma30-dca-strategy
 ```
 
