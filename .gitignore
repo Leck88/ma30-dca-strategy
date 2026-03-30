@@ -1,0 +1,32 @@
+# 数据文件（不上传到 GitHub）
+*_data.json
+backtest_results.json
+price_ma30.json
+
+# 生成的报告（可选择是否上传示例）
+*.html
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 输出目录
+output/
